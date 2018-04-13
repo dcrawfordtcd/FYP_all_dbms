@@ -30,6 +30,7 @@ public class AllPowers {
 
     public static final int NUM_DEVICES = 16;
     public static final int FLOOR = -90;
+    public static final boolean FILL_BLANKS = false;
     /**
      * @param args the command line arguments
      */
@@ -87,15 +88,6 @@ public class AllPowers {
                     contact[contactIndex][otherTag] = e.dBm;
                 present[otherTag] = true;
             }
-            
-            // fill in blank values
-            for(int i = 1; i < chunks; i++) {
-                int[] prevValues = new int[NUM_DEVICES];
-                for(int j = 0; j < NUM_DEVICES;j++) {
-                    if(contact[i][j] == FLOOR || contact[i][j] == 0)
-                        contact[i][j] = contact[i-1][j];
-                }
-            }
         }
         else if (mode.equals("5ptaverage")) {
             HashMap<Integer, Queue<Integer>> tagIdTo5LastPoints = new HashMap<>();
@@ -123,14 +115,6 @@ public class AllPowers {
                 int average = (int) currentPoints.stream().mapToInt(i -> i).average().orElse(0);
                 contact[contactIndex][otherTag] = average;
                 present[otherTag] = true;
-            }
-            // fill in blank values
-            for(int i = 1; i < chunks; i++) {
-                int[] prevValues = new int[NUM_DEVICES];
-                for(int j = 0; j < NUM_DEVICES;j++) {
-                    if(contact[i][j] == FLOOR || contact[i][j] == 0)
-                        contact[i][j] = contact[i-1][j];
-                }
             }
         }
         else if (mode.equals("5ptewma")) {
@@ -168,7 +152,10 @@ public class AllPowers {
                 contact[contactIndex][otherTag] = (int)oldValue;
                 present[otherTag] = true;
             }
-            // fill in blank values
+        }
+        
+        // fill in blank values
+        if(FILL_BLANKS) {
             for(int i = 1; i < chunks; i++) {
                 int[] prevValues = new int[NUM_DEVICES];
                 for(int j = 0; j < NUM_DEVICES;j++) {
