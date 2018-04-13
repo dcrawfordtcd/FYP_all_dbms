@@ -57,7 +57,7 @@ public class AllPowers {
         if(args.length == 6) {
             mode = args[5];
         }
-        ArrayList<Event> events = DBclass.getContactEvents(conn, threshold, startNode);
+        ArrayList<Event> events = DBclass.getContactEvents(conn, FLOOR, startNode);
         if(events.size() == 0)
         {
             System.out.println("No events returned.");
@@ -75,6 +75,7 @@ public class AllPowers {
         for(int i = 0; i < chunks; i++)
             Arrays.fill(contact[i], FLOOR); 
         boolean[] present = new boolean[NUM_DEVICES];
+        int[] timeSpentWith = new int[NUM_DEVICES];
         
         if(mode.equals("peak")) {
             for(Event e : events) {
@@ -84,8 +85,10 @@ public class AllPowers {
                 else
                     otherTag = e.tag1;
                 int contactIndex = Math.min((int) (((e.UTC*1000-startTime) + resolution/2)/resolution), chunks-1);
-                if(contact[contactIndex][otherTag] < e.dBm)
+                if(contact[contactIndex][otherTag] < e.dBm && e.dBm > threshold) {
                     contact[contactIndex][otherTag] = e.dBm;
+                    timeSpentWith[otherTag] += resolution;
+                }
                 present[otherTag] = true;
             }
         }
@@ -113,7 +116,10 @@ public class AllPowers {
                     currentPoints.remove();
                 currentPoints.add(e.dBm);
                 int average = (int) currentPoints.stream().mapToInt(i -> i).average().orElse(0);
-                contact[contactIndex][otherTag] = average;
+                if(average > threshold) {
+                    contact[contactIndex][otherTag] = average;
+                    timeSpentWith[otherTag]++;
+                }
                 present[otherTag] = true;
             }
         }
@@ -149,7 +155,10 @@ public class AllPowers {
                         oldValue = oldValue + alpha* ((double) i - oldValue);
                 }
                 
-                contact[contactIndex][otherTag] = (int)oldValue;
+                if((int)oldValue > threshold) {
+                    contact[contactIndex][otherTag] = (int)oldValue;
+                    timeSpentWith[otherTag]++;
+                }
                 present[otherTag] = true;
             }
         }
@@ -187,8 +196,10 @@ public class AllPowers {
                         csvLine += "" + contact[i][j] + ",";
                     if(contact[i][j] >= maxDBm) {
                         maxDBm = contact[i][j];
-                        mainContact = j;
-                        prevMainContact = j;
+                        if(contact[i][j] > threshold) {
+                            mainContact = j;
+                            prevMainContact = j;
+                        }
                     }
                 }
                 else if (present[j])
@@ -209,7 +220,18 @@ public class AllPowers {
             fop.flush();
             System.out.println(line);
         }
-        
+        for(int i = 0; i < NUM_DEVICES; i++) {
+            if(present[i]) {
+                int totalSecs = timeSpentWith[i];
+                int hours = totalSecs / 3600;
+                int minutes = (totalSecs % 3600) / 60;
+                int seconds = totalSecs % 60;
+                System.out.println("Spent "
+                        + String.format("%02d:%02d:%02d", hours, minutes, seconds) 
+                        + " in contact with "
+                        + String.format("%1X", i));
+            }
+        }
         System.out.println("START=" + startTS2);
         System.out.println("END=  " + endTS2);
         fop.close();
