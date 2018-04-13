@@ -87,6 +87,15 @@ public class AllPowers {
                     contact[contactIndex][otherTag] = e.dBm;
                 present[otherTag] = true;
             }
+            
+            // fill in blank values
+            for(int i = 1; i < chunks; i++) {
+                int[] prevValues = new int[NUM_DEVICES];
+                for(int j = 0; j < NUM_DEVICES;j++) {
+                    if(contact[i][j] == FLOOR || contact[i][j] == 0)
+                        contact[i][j] = contact[i-1][j];
+                }
+            }
         }
         else if (mode.equals("5ptaverage")) {
             HashMap<Integer, Queue<Integer>> tagIdTo5LastPoints = new HashMap<>();
