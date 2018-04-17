@@ -19,7 +19,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Stack;
 import java.util.TimeZone;
 
 /**
@@ -30,7 +32,7 @@ public class AllPowers {
 
     public static final int NUM_DEVICES = 16;
     public static final int FLOOR = -90;
-    public static final boolean FILL_BLANKS = false;
+    public static final boolean FILL_BLANKS = true;
     /**
      * @param args the command line arguments
      */
@@ -92,7 +94,7 @@ public class AllPowers {
                 present[otherTag] = true;
             }
         }
-        else if (mode.equals("5ptaverage")) {
+        else {
             HashMap<Integer, Queue<Integer>> tagIdTo5LastPoints = new HashMap<>();
             chunks = ((int) (endTime-startTime))/1000;
             contact = new int[chunks][NUM_DEVICES];
@@ -107,56 +109,40 @@ public class AllPowers {
                 
                 int contactIndex = Math.min((int) (((e.UTC*1000-startTime) + 1000/2)/1000), chunks-1);
                 if(!tagIdTo5LastPoints.containsKey(otherTag)) {
-                    Queue<Integer> temp = new ArrayDeque<>();
-                    temp.add(e.dBm);
+                    Queue<Integer> temp = new LinkedList<>();
                     tagIdTo5LastPoints.put(otherTag, temp);
                 }
+                
                 Queue<Integer> currentPoints = tagIdTo5LastPoints.get(otherTag);
+                currentPoints.add(e.dBm);
                 if(currentPoints.size() > 5)
                     currentPoints.remove();
-                currentPoints.add(e.dBm);
-                int average = (int) currentPoints.stream().mapToInt(i -> i).average().orElse(0);
-                if(average > threshold) {
-                    contact[contactIndex][otherTag] = average;
-                    timeSpentWith[otherTag]++;
+                int valToInsert = FLOOR;
+                if (mode.equals("5ptaverage")) {
+                    valToInsert = (int) currentPoints.stream().mapToInt(i -> i).average().orElse(0);
                 }
-                present[otherTag] = true;
-            }
-        }
-        else if (mode.equals("5ptewma")) {
-            HashMap<Integer, Queue<Integer>> tagIdTo5LastPoints = new HashMap<>();
-            chunks = ((int) (endTime-startTime))/1000;
-            contact = new int[chunks][NUM_DEVICES];
-            for(int i = 0; i < chunks; i++)
-                Arrays.fill(contact[i], 0); 
-            for(Event e : events) {
-                int otherTag;
-                if(e.tag1 == startNode)
-                    otherTag = e.tag2;
-                else
-                    otherTag = e.tag1;
-                
-                int contactIndex = Math.min((int) (((e.UTC*1000-startTime) + 1000/2)/1000), chunks-1);
-                if(!tagIdTo5LastPoints.containsKey(otherTag)) {
-                    Queue<Integer> temp = new ArrayDeque<>();
-                    temp.add(e.dBm);
-                    tagIdTo5LastPoints.put(otherTag, temp);
+                if (mode.equals("5ptewma")) {
+                    Stack<Integer> reverseQ = new Stack<>();
+                    String s = "emwa = ";
+                    for(Integer i : currentPoints) {
+                        reverseQ.add(i);
+                        s += i + " ";
+                    }
+                    double alpha = 0.5;
+                    double oldValue = 0.0;
+                    s += " after weighting ";
+                    for(Integer i : reverseQ) {
+                        if(oldValue == 0.0)
+                            oldValue = i;
+                        else
+                            oldValue = oldValue + alpha* ((double) i - oldValue);
+                        s+= oldValue + " ";
+                    }
+                    //System.out.println(s);
+                    valToInsert = (int) oldValue;
                 }
-                Queue<Integer> currentPoints = tagIdTo5LastPoints.get(otherTag);
-                if(currentPoints.size() > 5)
-                    currentPoints.remove();
-                currentPoints.add(e.dBm);
-                double oldValue = 0.0;
-                double alpha = 0.2;
-                for(Integer i : currentPoints) {
-                    if(oldValue == 0.0)
-                        oldValue = i;
-                    else
-                        oldValue = oldValue + alpha* ((double) i - oldValue);
-                }
-                
-                if((int)oldValue > threshold) {
-                    contact[contactIndex][otherTag] = (int)oldValue;
+                if(valToInsert > threshold) {
+                    contact[contactIndex][otherTag] = valToInsert;
                     timeSpentWith[otherTag]++;
                 }
                 present[otherTag] = true;
@@ -166,10 +152,10 @@ public class AllPowers {
         // fill in blank values
         if(FILL_BLANKS) {
             for(int i = 1; i < chunks; i++) {
-                int[] prevValues = new int[NUM_DEVICES];
                 for(int j = 0; j < NUM_DEVICES;j++) {
-                    if(contact[i][j] == FLOOR || contact[i][j] == 0)
+                    if(contact[i][j] == FLOOR || contact[i][j] == 0) {
                         contact[i][j] = contact[i-1][j];
+                    }
                 }
             }
         }
